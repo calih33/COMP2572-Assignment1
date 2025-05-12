@@ -14,8 +14,9 @@ const app = express();
 
 const Joi = require("joi");
 
+var users = [];
 
-const expireTime = 24 * 60 * 60 * 1000; //expires after 1 day  (hours * minutes * seconds * millis)
+const expireTime = 24 * 60 * 60 * 1000;
 
 /* secret information section */
 const mongodb_host = process.env.MONGODB_HOST;
@@ -25,7 +26,6 @@ const mongodb_database = process.env.MONGODB_DATABASE;
 const mongodb_session_secret = process.env.MONGODB_SESSION_SECRET;
 
 const node_session_secret = process.env.NODE_SESSION_SECRET;
-/* END secret section */
 
 var {database} = include('databaseConnection');
 
@@ -35,22 +35,18 @@ app.use(express.urlencoded({extended: false}));
 
 var mongoStore = MongoStore.create({
 	mongoUrl: `mongodb+srv://${mongodb_user}:${mongodb_password}@${mongodb_host}/sessions`,
-	crypto: {
-		secret: mongodb_session_secret
-	}
+    crypto: {
+                secret: mongodb_session_secret
+    }
 })
 
 app.use(session({ 
     secret: node_session_secret,
-	store: mongoStore, //default is memory store 
+	store: mongoStore, 
 	saveUninitialized: false, 
 	resave: true
 }
 ));
-
-app.get('/', (req,res) => {
-    res.send("<h1>Hello World!</h1>");
-});
 
 app.get('/nosql-injection', async (req,res) => {
 	var username = req.query.user;
@@ -85,7 +81,7 @@ app.get('/nosql-injection', async (req,res) => {
 app.get('/about', (req,res) => {
     var color = req.query.color;
 
-    res.send("<h1 style='color:"+color+";'>Patrick Guichon</h1>");
+    res.send("<h1 style='color:"+color+";'>Cali Heung</h1>");
 });
 
 app.get('/contact', (req,res) => {
@@ -113,12 +109,31 @@ app.post('/submitEmail', (req,res) => {
     }
 });
 
+app.get('/', (req, res) => {
+	if (req.session.authenticated) {
+		const html = `
+			<h1>Hello, ${req.session.username}</h1>
+			<a href="/members"><button>Go to Members Area</button></a>
+			<a href="/logout"><button>Logout</button></a>
+		`;
+		res.send(html);
+	} else {
+		const html = `
+			<h1>Welcome to My Website</h1>
+			<a href="/createUser"><button>Sign Up</button></a>
+			<a href="/login"><button>Login</button></a>
+		`;
+		res.send(html);
+	}
+});
+
 
 app.get('/createUser', (req,res) => {
     var html = `
     create user
     <form action='/submitUser' method='post'>
-    <input name='username' type='text' placeholder='username'>
+    <input name='name' type='text' placeholder='name'>
+    <input name='email' type='email' placeholder='email'>
     <input name='password' type='password' placeholder='password'>
     <button>Submit</button>
     </form>
@@ -129,55 +144,68 @@ app.get('/createUser', (req,res) => {
 
 app.get('/login', (req,res) => {
     var html = `
-    log in
+    log in 
     <form action='/loggingin' method='post'>
-    <input name='username' type='text' placeholder='username'>
+    <input name='email' type='text' placeholder='email'>
     <input name='password' type='password' placeholder='password'>
     <button>Submit</button>
     </form>
     `;
+
     res.send(html);
 });
 
 app.post('/submitUser', async (req,res) => {
-    var username = req.body.username;
+    var name = req.body.name;
+    var email = req.body.email;
     var password = req.body.password;
+
+    if (!name || !email || !password) {
+        var missingFields = [];
+        if (!name) missingFields.push("Name is required </br>");
+        if (!email) missingFields.push("Email is required </br>");
+        if (!password) missingFields.push("Password is required </br>");
+    
+        var message = `${missingFields.join('')} <a href='/createUser'>Try Again</a>
+        `;
+        return res.send(message);
+    }
 
 	const schema = Joi.object(
 		{
-			username: Joi.string().alphanum().max(20).required(),
+			name: Joi.string().alphanum().max(20).required(),
+            email: Joi.string().email().required(),
 			password: Joi.string().max(20).required()
 		});
 	
-	const validationResult = schema.validate({username, password});
+	const validationResult = schema.validate({name, email, password});
 	if (validationResult.error != null) {
 	   console.log(validationResult.error);
-	   res.redirect("/createUser");
+       res.send(`<a href='/createUser'>Try Again</a>`);
 	   return;
    }
 
     var hashedPassword = await bcrypt.hash(password, saltRounds);
 	
-	await userCollection.insertOne({username: username, password: hashedPassword});
+    await userCollection.insertOne({name: name, email: email, password: hashedPassword});
 	console.log("Inserted user");
 
-    var html = "successfully created user";
-    res.send(html);
+    res.redirect("/members")
 });
 
 app.post('/loggingin', async (req,res) => {
-    var username = req.body.username;
+    var email = req.body.email;
     var password = req.body.password;
 
-	const schema = Joi.string().max(20).required();
-	const validationResult = schema.validate(username);
+    const schema = Joi.string().email().required();
+	const validationResult = schema.validate(email);
 	if (validationResult.error != null) {
 	   console.log(validationResult.error);
 	   res.redirect("/login");
 	   return;
 	}
 
-	const result = await userCollection.find({username: username}).project({username: 1, password: 1, _id: 1}).toArray();
+	const result = await userCollection.find({email: email}).project({name: 1, password: 1, _id: 1}).toArray();
 
 	console.log(result);
 	if (result.length != 1) {
@@ -188,10 +216,11 @@ app.post('/loggingin', async (req,res) => {
 	if (await bcrypt.compare(password, result[0].password)) {
 		console.log("correct password");
 		req.session.authenticated = true;
-		req.session.username = username;
+		req.session.email = email;
+        req.session.name = result[0].name;
 		req.session.cookie.maxAge = expireTime;
 
-		res.redirect('/loggedIn');
+		res.redirect('/loggedin');
 		return;
 	}
 	else {
@@ -201,38 +230,35 @@ app.post('/loggingin', async (req,res) => {
 	}
 });
 
-app.get('/loggedin', (req,res) => {
-    if (!req.session.authenticated) {
+app.get('/loggedin', (req, res) => {
+	if (!req.session.authenticated) {
+		return res.redirect('/login');
+	}
+	const html = `
+		<h1>Hello, ${req.session.name}!</h1>
+		<a href="/members"><button>Go to Members Area</button></a>
+		<a href="/logout"><button>Logout</button></a>
+	`;
+	res.send(html);
+});
+
+app.get('/members', (req, res) => {
+    if (!req.session.name) {
         res.redirect('/login');
+        return;
     }
-    var html = `
-    You are logged in!
-    `;
-    res.send(html);
-});
-
-app.get('/logout', (req,res) => {
-	req.session.destroy();
-    var html = `
-    You are logged out.
-    `;
-    res.send(html);
+    const html = `
+		<h1>Hello, ${req.session.name}!</h1>
+        <img src='/fluffy.gif' style='width:250px;'></br>
+		<a href="/logout"><button>Logout</button></a>
+	`;
+	res.send(html);
 });
 
 
-app.get('/cat/:id', (req,res) => {
-
-    var cat = req.params.id;
-
-    if (cat == 1) {
-        res.send("Fluffy: <img src='/fluffy.gif' style='width:250px;'>");
-    }
-    else if (cat == 2) {
-        res.send("Socks: <img src='/socks.gif' style='width:250px;'>");
-    }
-    else {
-        res.send("Invalid cat id: "+cat);
-    }
+app.get('/logout', (req, res) => {
+    req.session.destroy(); 
+    res.redirect('/');       
 });
 
 
