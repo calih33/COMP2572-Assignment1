@@ -58,7 +58,7 @@ app.get('/nosql-injection', async (req,res) => {
 	console.log("user: "+username);
 
 	const schema = Joi.string().max(20).required();
-	const validationResult = schema.validate(username);
+	const validationResult = schema.validate(req.body.username);
 
 	//If we didn't use Joi to validate and check for a valid URL parameter below
 	// we could run our userCollection.find and it would be possible to attack.
@@ -67,7 +67,7 @@ app.get('/nosql-injection', async (req,res) => {
 	// login without knowing the correct password.
 	if (validationResult.error != null) {  
 	   console.log(validationResult.error);
-	   res.send("<h1 style='color:darkred;'>A NoSQL injection attack was detected!!</h1>");
+       res.redirect("/login")
 	   return;
 	}	
 
@@ -197,47 +197,51 @@ app.post('/loggingin', async (req,res) => {
     var email = req.body.email;
     var password = req.body.password;
 
-    const schema = Joi.string().email().required();
-	const validationResult = schema.validate(email);
-	if (validationResult.error != null) {
-	   console.log(validationResult.error);
-	   res.redirect("/login");
-	   return;
-	}
+    var schema = Joi.string().email().required();
+    var validationResult = schema.validate(email);
+    if (validationResult.error != null) {
+        return res.send(`
+            <h1>User not found</h1>
+            <a href='/login'><button>Try Again</button></a>
+        `);
+    }
 
-	const result = await userCollection.find({email: email}).project({name: 1, password: 1, _id: 1}).toArray();
+    var result = await userCollection.find({email: email}).project({name: 1, password: 1, _id: 1}).toArray();
 
-	console.log(result);
-	if (result.length != 1) {
-		console.log("user not found");
-		res.redirect("/login");
-		return;
-	}
-	if (await bcrypt.compare(password, result[0].password)) {
-		console.log("correct password");
-		req.session.authenticated = true;
-		req.session.email = email;
+    if (result.length !== 1) {
+        res.send(`
+            <h1>User not found</h1>
+            <a href='/login'><button>Try Again</button></a>
+        `);
+        return;
+    }
+    if (await bcrypt.compare(password, result[0].password)) {
+        req.session.authenticated = true;
+        req.session.email = email;
         req.session.name = result[0].name;
-		req.session.cookie.maxAge = expireTime;
+        req.session.cookie.maxAge = expireTime;
 
-		res.redirect('/loggedin');
-		return;
-	}
-	else {
-		console.log("incorrect password");
-		res.redirect("/login");
-		return;
-	}
+        res.redirect('/loggedin');
+        return;
+    }
+    else {
+        var html = `
+        <h1>Invalid username/password</h1>
+        <a href='/login'><button>Try Again</button></a>
+        `;
+
+    }
 });
+
 
 app.get('/loggedin', (req, res) => {
 	if (!req.session.authenticated) {
 		return res.redirect('/login');
 	}
-	const html = `
+	var html = `
 		<h1>Hello, ${req.session.name}!</h1>
-		<a href="/members"><button>Go to Members Area</button></a>
-		<a href="/logout"><button>Logout</button></a>
+		<a href='/members'><button>Go to Members Area</button></a>
+		<a href='/logout'><button>Logout</button></a>
 	`;
 	res.send(html);
 });
@@ -249,7 +253,7 @@ app.get('/members', (req, res) => {
     }
     const html = `
 		<h1>Hello, ${req.session.name}!</h1>
-        <img src='/fluffy.gif' style='width:250px;'></br>
+        <img src='/cat.gif' style='width:250px;'></br>
 		<a href="/logout"><button>Logout</button></a>
 	`;
 	res.send(html);
