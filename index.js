@@ -255,12 +255,7 @@ app.get('/logout', (req, res) => {
     });
 });
 
-app.get('/admin', sessionValidation, async (req, res) => {
-    if (req.session.user_type !== 'admin') {
-        res.status(403);
-        return res.render("403", { error: "You are not authorized to access this page." });
-    }
-
+app.get('/admin', sessionValidation, adminAuthorization, async (req, res) => {
     const result = await userCollection.find().project({
         username: 1,
         name: 1,
@@ -273,7 +268,8 @@ app.get('/admin', sessionValidation, async (req, res) => {
 
 
 
-app.get('/promote/:username', async (req, res) => {
+
+app.get('/promote/:username', adminAuthorization, async (req, res) => {
     const username = req.params.username;
     try {
         await userCollection.updateOne(
@@ -287,7 +283,7 @@ app.get('/promote/:username', async (req, res) => {
     }
 });
 
-app.get('/demote/:username', async (req, res) => {
+app.get('/demote/:username', adminAuthorization, async (req, res) => {
     const username = req.params.username;
     try {
         await userCollection.updateOne(
@@ -300,6 +296,7 @@ app.get('/demote/:username', async (req, res) => {
         res.send('Error!');
     }
 });
+
 
 app.use(express.static(__dirname + "/public"));
 
