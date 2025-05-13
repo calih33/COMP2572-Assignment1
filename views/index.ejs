@@ -1,0 +1,23 @@
+<%- include("templates/header") %>
+
+<div class="container d-flex justify-content-center pt-4">
+    <div class="text-center">
+        <% if (name) { %>
+            <h1>Hello, <%= name %>!</h1>
+            <a href="/members"><button class="btn btn-primary">Go to Members Area</button></a><br>
+            <a href="/logout"><button class="btn btn-danger">Logout</button></a>
+        <% } else { %>
+            <h1>Welcome to my website!</h1>
+            <a href="/createUser"><button type="button" class="btn btn-primary btn-lg">Sign Up</button></a> 
+            <a href="/login"><button type="button" class="btn btn-primary btn-lg">Login</button></a>
+        <% } %>
+    </div>
+</div>
+
+<div class="container d-flex justify-content-center mt-4">
+    <div class="text-center">
+        <img src="neo.png" alt="Neo" style="width:400px;">
+    </div>
+</div>
+
+<%- include("templates/footer") %>

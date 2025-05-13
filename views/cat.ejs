@@ -1,0 +1,9 @@
+<%- include("templates/header") %> 
+    <%  if (cat == 1) { %> 
+        Fluffy: <img src='/cat.gif' style='width:250px;'>
+    <% } else if (cat == 2) { %>
+        Socks: <img src='/cat.gif' style='width:250px;'>
+    <% } else { %>
+        Invalid cat id: <%= cat %> 
+    <% } %>  
+<%- include("templates/footer") %> 
